@@ -33,6 +33,10 @@
 - 一把 **LLM 的 key**（DeepSeek / 任意 OpenAI 兼容服务），以及（可选）一把 **Fish Audio key**。
 - Windows 用户可直接用仓库里的 `.vbs` / `.cmd` 启动脚本；其它系统用 `node xxx.mjs` 即可。
 
+```bash
+npm install      # 只有一个依赖：undici（TTS 走本地 HTTP 代理时才用得上）
+```
+
 ### 1. 拿到角色卡
 
 ```bash
@@ -60,14 +64,19 @@ Windows 上想开机常驻、又不想要黑窗口：
 .\stop-tts-relay.cmd     # 按端口停掉（8789）
 ```
 
-自检：
+自检（**不需要任何 key、不碰外网**；`npm test` = 下面三个一起跑）：
 
 ```bash
+npm test                      # 一条命令跑完三个自检
 node test.mjs                 # LLM 中转离线自检（假上游逐字段对账）
 node tts-relay-test.mjs       # TTS 中转离线自检
 node shared-context-test.mjs  # 共享记忆逻辑自检（可选功能）
 curl http://127.0.0.1:8788/health
 ```
+
+> 自检**只依赖仓库自带的东西**（`test-fixtures/` 里的测试角色卡 + 临时空目录）：
+> 不读你的 `persona.md`，也不读插件真实数据 —— 所以刚 clone 下来就该全绿。
+> 若出现 FAIL，那是真有问题，别当成"环境没配好"。
 
 ### 3. 在游戏里加站点
 
@@ -182,6 +191,7 @@ persona.example.md     角色卡模板（复制成 persona.md 再用）
 test.mjs               relay 离线自检
 tts-relay-test.mjs     tts-relay 离线自检
 shared-context-test.mjs 共享记忆自检
+test-fixtures/         自检用的测试角色卡（不含任何第三方角色卡）
 tools/                 真机自检与取证工具（见 docs/PROTOCOL.md §6）
 extensions/maid-memory/ 可选的 DSH 插件（共享记忆）
 docs/PROTOCOL.md       实测协议笔记与踩坑清单

@@ -1,1 +1,1 @@
-{"name":"maid-bridge","private":true,"type":"module","dependencies":{"undici":"^8.11.2"}}
+{"name":"maid-bridge","private":true,"type":"module","dependencies":{"undici":"^8.11.2"},"scripts":{"test":"node test.mjs && node shared-context-test.mjs && node tts-relay-test.mjs"}}

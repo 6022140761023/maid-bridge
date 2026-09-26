@@ -12,7 +12,18 @@
  */
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { createRelay, buildMessages, buildUpstreamBody } from './relay.mjs'
+
+/**
+ * 自检**只允许依赖仓库自带的东西**：一份测试角色卡 + 一个空目录。
+ * 绝不读本机私有的 persona.md，也不读真实插件 data（否则别人的机器上必然挂：
+ * persona.md 被 .gitignore 排除、插件目录根本不存在）。
+ */
+const FIXTURE = fileURLToPath(new URL('./test-fixtures/persona.fixture.md', import.meta.url))
+const EMPTY_SHARED = mkdtempSync(join(tmpdir(), 'maid-bridge-empty-'))
 
 const results = []
 const ok = (n, extra = '') => results.push({ pass: true, n, extra })
@@ -39,8 +50,8 @@ const tlmShapeRequest = () => ({
 /* ── 1. 纯函数：插角色卡的正确性（最容易写错的一层）────────────────────────── */
 {
   const req = tlmShapeRequest()
-  const m = buildMessages(req.messages, '【角色卡】你是早濑优香。')
-  const personaAt = m.findIndex((x) => String(x.content).includes('早濑优香'))
+  const m = buildMessages(req.messages, '【测试角色卡】你是测试女仆。')
+  const personaAt = m.findIndex((x) => String(x.content).includes('【测试角色卡】'))
   if (m.length === req.messages.length + 1 && personaAt === 2) ok('插角色卡：多了一条 system，且落在 TLM 的 system/developer 段**之后**（第 2 条）')
   else bad('插角色卡（位置）', JSON.stringify({ len: m.length, personaAt, roles: m.map((x) => x.role) }))
   if (String(m[0].content).includes('JSON') && String(m[1].content).includes('游戏上下文')) ok('插角色卡：TLM 自己的输出格式约定与游戏上下文**原封不动**（连顺序都没变）')
@@ -83,7 +94,9 @@ const tlmShapeRequest = () => ({
 
 /* ── 2. mock 模式：形状自检（不需要 key、不碰外网）─────────────────────────── */
 {
-  const srv = createRelay({ mock: true })
+  // ⚠️ 必须显式指定测试角色卡 + 空目录：否则 mock 会读**本机私有的** persona.md
+  //    与真实插件 data —— 那样"通过"只说明我这台机器恰好配好了，别人 clone 下来必挂。
+  const srv = createRelay({ mock: true, personaPath: FIXTURE, sharedContextDir: EMPTY_SHARED })
   const port = await listen(srv)
   try {
     const r = await fetch(`${base(port)}/v1/chat/completions`, {
@@ -125,7 +138,7 @@ const tlmShapeRequest = () => ({
     })
   })
   const upPort = await listen(upstream)
-  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/v1/chat/completions`, personaPath: fileURLToPath(new URL('./persona.md', import.meta.url)) })
+  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/v1/chat/completions`, personaPath: FIXTURE })
   const rPort = await listen(relay)
   try {
     const r = await fetch(`${base(rPort)}/v1/chat/completions`, {
@@ -138,8 +151,8 @@ const tlmShapeRequest = () => ({
     if (seen?.headers.authorization === 'Bearer sk-test-1234') ok('转发：**原样透传**客户端的 Authorization（中转自己不用存密钥）')
     else bad('转发（鉴权透传）', String(seen?.headers.authorization))
     const msgs = seen?.body.messages ?? []
-    const pat = msgs.findIndex((x) => String(x.content).includes('早濑优香'))
-    if (pat === 2) ok('转发：角色卡真读进了 persona.md，并落在第 2 条（TLM 的 system/developer 之后）')
+    const pat = msgs.findIndex((x) => String(x.content).includes('【测试角色卡】'))
+    if (pat === 2) ok('转发：角色卡真读进了 personaPath 指定的文件，并落在第 2 条（TLM 的 system/developer 之后）')
     else bad('转发（角色卡）', JSON.stringify({ pat, roles: msgs.map((x) => x.role) }).slice(0, 200))
     if (!msgs.some((x) => x.role === 'developer')) ok('转发：到上游时 **developer 已被改写成 system**（不修这条，游戏里必然 422）')
     else bad('转发（role 修正）', JSON.stringify(msgs.map((x) => x.role)))
@@ -177,6 +190,8 @@ const tlmShapeRequest = () => ({
     else bad('400 形状', `${r3.status}`)
   } finally { srv.close() }
 }
+
+rmSync(EMPTY_SHARED, { recursive: true, force: true })
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────────── */
 const pass = results.filter((r) => r.pass).length

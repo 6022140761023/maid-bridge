@@ -7,8 +7,12 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
+import { fileURLToPath } from 'node:url'
 import { readRuntime, shouldInject, memoryMessage, foldForBridge, shapeBridgeReply } from './shared-context.mjs'
 import { createRelay } from './relay.mjs'
+
+/** 同 test.mjs：角色卡一律用仓库自带的测试卡，不读本机私有的 persona.md */
+const FIXTURE = fileURLToPath(new URL('./test-fixtures/persona.fixture.md', import.meta.url))
 
 const results = []
 const ok = (n) => results.push({ pass: true, n })
@@ -108,13 +112,13 @@ const tlmReq = () => ({
   })
   const upPort = await listen(upstream)
   const ctxDir = fakePluginData({ mode: 'maid' })
-  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/v1/chat/completions`, sharedContextDir: ctxDir })
+  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/v1/chat/completions`, sharedContextDir: ctxDir, personaPath: FIXTURE })
   const rPort = await listen(relay)
   try {
     await fetch(`${base(rPort)}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer X' }, body: JSON.stringify(tlmReq()) })
     const roles = (seen?.messages ?? []).map((m) => m.role)
     const memAt = (seen?.messages ?? []).findIndex((m) => String(m.content).includes('【共享记忆'))
-    const personaAt = (seen?.messages ?? []).findIndex((m) => String(m.content).includes('早濑优香'))
+    const personaAt = (seen?.messages ?? []).findIndex((m) => String(m.content).includes('【测试角色卡】'))
     if (memAt >= 0 && memAt === personaAt + 1) ok(`relay 注入：共享记忆落在**角色卡之后**（角色卡第 ${personaAt} 条、记忆第 ${memAt} 条）`)
     else bad('注入位置', JSON.stringify({ personaAt, memAt, roles }))
     if (roles.join('/') === 'system/system/system/system/user') ok('relay 注入：出方向角色序列 = system×4 + user（TLM 两段 + 角色卡 + 记忆）')
@@ -131,7 +135,7 @@ const tlmReq = () => ({
   })
   const upPort = await listen(upstream)
   const ctxDir = fakePluginData({ mode: 'both', alive: 'stale-dead' })
-  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/x`, sharedContextDir: ctxDir })
+  const relay = createRelay({ upstream: `http://127.0.0.1:${upPort}/x`, sharedContextDir: ctxDir, personaPath: FIXTURE })
   const rPort = await listen(relay)
   try {
     await fetch(`${base(rPort)}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer X' }, body: JSON.stringify(tlmReq()) })
@@ -154,7 +158,7 @@ const tlmReq = () => ({
   const bPort = await listen(fakeBridge)
   const ctxDir = fakePluginData({ mode: 'wild' })
   // 故意给一个“正常上游”地址：狂野模式**不该**用它
-  const relay = createRelay({ upstream: 'http://127.0.0.1:1/should-not-be-used', sharedContextDir: ctxDir, bridge: `http://127.0.0.1:${bPort}/openclaw-bridge/v1/chat/completions`, bridgeModel: 'dsh-bridge/test' })
+  const relay = createRelay({ upstream: 'http://127.0.0.1:1/should-not-be-used', sharedContextDir: ctxDir, personaPath: FIXTURE, bridge: `http://127.0.0.1:${bPort}/openclaw-bridge/v1/chat/completions`, bridgeModel: 'dsh-bridge/test' })
   const rPort = await listen(relay)
   try {
     const r = await fetch(`${base(rPort)}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer SHOULD-NOT-FORWARD' }, body: JSON.stringify(tlmReq()) })
@@ -166,7 +170,7 @@ const tlmReq = () => ({
     if (!bridgeReq?.headers?.authorization) ok('狂野模式：**故意不转发** Authorization（回环免 token，转发别人的 key 反而会被拒）')
     else bad('狂野（透传了 Authorization）', String(bridgeReq?.headers?.authorization))
     const u = String(bridgeReq?.body?.messages?.[0]?.content ?? '')
-    if (u.includes('【角色设定】') && u.includes('【共享记忆】') && u.includes('单独一行只写 ---') && u.includes('早濑优香')) ok('狂野模式：折叠后的 user 文本含 真实角色卡 + 记忆 + 输出契约')
+    if (u.includes('【角色设定】') && u.includes('【共享记忆】') && u.includes('单独一行只写 ---') && u.includes('【测试角色卡】')) ok('狂野模式：折叠后的 user 文本含 角色卡 + 记忆 + 输出契约')
     else bad('狂野（折叠）', u.slice(0, 200))
     if (bridgeReq?.body?.messages?.length === 1 && bridgeReq?.body?.messages?.[0]?.role === 'user') ok('狂野模式：只发**一条** user（桥接只认 user）')
     else bad('狂野（消息数）', JSON.stringify(bridgeReq?.body?.messages?.map((m) => m.role)))
