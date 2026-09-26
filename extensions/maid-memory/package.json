@@ -1,0 +1,13 @@
+{
+  "name": "maid-memory",
+  "version": "0.1.0",
+  "description": "共享记忆插件（车万女仆 × DSH）：把一段可编辑的「记忆」放在插件里，默认 off 不注入；插件一旦运行，就能按模式把记忆注入 DSH 上下文与/或女仆的 LLM 请求。支持狂野模式（把女仆的脑子直接接到 DSH 会话）。",
+  "type": "commonjs",
+  "main": "index.js",
+  "dsh": {
+    "extension": {
+      "permissions": {}
+    }
+  },
+  "license": "MIT"
+}

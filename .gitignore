@@ -1,0 +1,32 @@
+# ── 运行时产物：不进版本库 ──────────────────────────────────────────────
+node_modules/
+relay.log
+tts-relay.log
+dumps/
+dumps-tts/
+.out/
+*.tmp
+
+# ── 私人内容：留在本地，不发布 ──────────────────────────────────────────
+# 你自己的角色卡（把它换成 persona.example.md 的格式即可）
+persona.md
+persona.md.bak-*
+# 角色卡原件（可能受第三方许可证约束，别随仓库发布）
+cards/
+# 站点配置备份（里面有你的 API key）
+*.bak-*
+# 内部记录（含本机路径、排障过程等私人信息）
+NOTES.internal.md
+.agent-docs/
+
+# ── DSH 插件的运行期数据（插件源码会进仓库，data 不进）────────────────
+extensions/maid-memory/data/
+!extensions/maid-memory/data/.gitkeep
+
+# 插件的「记忆」正文属私人内容 —— 只发布 memory.example.md 模板
+extensions/maid-memory/memory.md
+
+# ── 系统 ────────────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
